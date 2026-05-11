@@ -1,9 +1,11 @@
 """Market data: prices, quotes, historical candles.
 
 Sources:
-- Jupiter price API (lite-api.jup.ag) for spot prices and swap quotes
-- Birdeye public OHLCV for historical candles (no API key needed for basic use)
-- CoinGecko for SOL/INR conversion (free tier, no key)
+- Binance public API for spot prices, klines, and paper-mode quote synthesis
+  (Anthropic's cloud sandbox is blocked by Jupiter's lite API, so paper mode
+  uses Binance as the single oracle. Live mode in Phase 4 will need Jupiter
+  via a different network path.)
+- Frankfurter (ECB) for USD/INR conversion — free, no key, generous limits.
 """
 from __future__ import annotations
 
@@ -20,11 +22,11 @@ from . import config
 
 log = logging.getLogger(__name__)
 
+BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines"
+BINANCE_TICKER_URL = "https://api.binance.com/api/v3/ticker/price"
+# Jupiter URLs kept here for Phase 4 live execution; not used in paper mode.
 JUPITER_PRICE_URL = "https://lite-api.jup.ag/price/v3"
 JUPITER_QUOTE_URL = "https://lite-api.jup.ag/swap/v1/quote"
-# Binance public klines — free, no key, very reliable. Used only for OHLCV history.
-# Execution still happens on-chain via Jupiter; Binance is the price oracle.
-BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines"
 # Frankfurter — ECB-sourced forex rates, free, no API key, generous limits.
 FRANKFURTER_URL = "https://api.frankfurter.app/latest"
 FX_CACHE_FILE = config.DATA_DIR / "fx_cache.json"
@@ -57,12 +59,20 @@ class Quote:
 
 
 def get_spot_price_usd(token_symbol: str) -> float:
-    """Get USD spot price for a token via Jupiter price API."""
-    mint = config.TOKENS[token_symbol]
-    r = requests.get(JUPITER_PRICE_URL, params={"ids": mint}, timeout=TIMEOUT)
+    """Get USD spot price for a token via Binance ticker.
+
+    Binance is reachable from Anthropic's cloud sandbox; Jupiter's lite API is not.
+    SOL/USDT on Binance tracks on-chain SOL/USDC within a few basis points.
+    """
+    if token_symbol not in BINANCE_SYMBOLS:
+        raise ValueError(f"No Binance mapping for {token_symbol}")
+    r = requests.get(
+        BINANCE_TICKER_URL,
+        params={"symbol": BINANCE_SYMBOLS[token_symbol]},
+        timeout=TIMEOUT,
+    )
     r.raise_for_status()
-    data = r.json()
-    return float(data[mint]["usdPrice"])
+    return float(r.json()["price"])
 
 
 # Forex rate is slow-moving — cache on disk for 1 hour across cron cycles.
@@ -95,7 +105,7 @@ def get_usd_inr_price() -> float:
 def get_sol_inr_price() -> float:
     """SOL price in INR — needed for tax cost basis.
 
-    Computed as SOL/USD (Jupiter) * USD/INR (Frankfurter ECB rate).
+    Computed as SOL/USD (Binance) * USD/INR (Frankfurter ECB rate).
     """
     return get_spot_price_usd("SOL") * _get_usd_inr_rate()
 
@@ -106,11 +116,49 @@ def get_quote(
     in_amount_ui: float,
     slippage_bps: int = 50,
 ) -> Quote:
-    """Get a Jupiter swap quote.
+    """Get a swap quote.
 
-    in_amount_ui is in UI units (e.g. 0.1 SOL, not lamports).
-    slippage_bps: 50 = 0.5%.
+    In paper mode (and from environments where Jupiter is unreachable), this
+    synthesizes a quote from Binance spot price. The result is good enough for
+    paper-trade simulation — real on-chain swaps in Phase 4 will need the live
+    Jupiter path which we'll wire then.
     """
+    if config.PAPER_MODE:
+        return _synthetic_quote(in_token, out_token, in_amount_ui, slippage_bps)
+    return _live_jupiter_quote(in_token, out_token, in_amount_ui, slippage_bps)
+
+
+def _synthetic_quote(in_token, out_token, in_amount_ui, slippage_bps) -> Quote:
+    """Build a paper-mode quote from Binance spot price."""
+    # Figure out the SOL/USDC price in UI units (both have a USD-denominated price).
+    if in_token == "SOL" and out_token == "USDC":
+        price = get_spot_price_usd("SOL")           # USDC per SOL
+    elif in_token == "USDC" and out_token == "SOL":
+        price = 1.0 / get_spot_price_usd("SOL")     # SOL per USDC
+    else:
+        raise ValueError(f"Unsupported pair: {in_token} -> {out_token}")
+
+    in_decimals = 9 if in_token == "SOL" else 6
+    out_decimals = 9 if out_token == "SOL" else 6
+
+    in_amount_raw = int(round(in_amount_ui * (10 ** in_decimals)))
+    out_amount_ui = in_amount_ui * price
+    out_amount_raw = int(round(out_amount_ui * (10 ** out_decimals)))
+
+    return Quote(
+        in_token=in_token,
+        out_token=out_token,
+        in_amount_raw=in_amount_raw,
+        out_amount_raw=out_amount_raw,
+        price=price,
+        price_impact_pct=0.0,
+        route_plan=[],
+        raw={"synthetic": True, "source": "binance"},
+    )
+
+
+def _live_jupiter_quote(in_token, out_token, in_amount_ui, slippage_bps) -> Quote:
+    """Real Jupiter quote — used only in live mode (Phase 4)."""
     in_mint = config.TOKENS[in_token]
     out_mint = config.TOKENS[out_token]
 
