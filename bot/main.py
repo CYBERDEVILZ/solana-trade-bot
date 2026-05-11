@@ -72,7 +72,7 @@ def paper_balances(state: BotState, sol_price_usd: float, usdc_inr: float) -> tu
     # Paper-mode USDC = total starting capital minus what we spent on SOL,
     # plus realized P&L from completed trades.
     # Simpler: track paper_usdc_balance on state directly.
-    return sol, getattr(state, "_paper_usdc", 0.0)
+    return sol, state.paper_usdc
 
 
 def run_cycle() -> int:
@@ -100,10 +100,10 @@ def run_cycle() -> int:
                 state.peak_equity_inr = config.MAX_CAPITAL_INR
                 state.daily_start_equity_inr = config.MAX_CAPITAL_INR
                 # Seed paper wallet with starting capital entirely in USDC
-                state.__dict__["_paper_usdc"] = config.MAX_CAPITAL_INR / usd_inr
-                log.info(f"Paper mode initialized with Rs {config.MAX_CAPITAL_INR} = {state.__dict__['_paper_usdc']:.4f} USDC")
+                state.paper_usdc = config.MAX_CAPITAL_INR / usd_inr
+                log.info(f"Paper mode initialized with Rs {config.MAX_CAPITAL_INR} = {state.paper_usdc:.4f} USDC")
             sol_bal = state.position.qty if state.position else 0.0
-            usdc_bal = state.__dict__.get("_paper_usdc", 0.0)
+            usdc_bal = state.paper_usdc
         else:
             sol_bal, usdc_bal = get_balances()
 
@@ -145,10 +145,26 @@ def run_cycle() -> int:
         else:
             log.info("No action this cycle.")
 
-        # 6. Final summary + telegram
+        # 6. Day 7 milestone banner
+        if not state.start_date_iso:
+            state.start_date_iso = datetime.now(timezone.utc).isoformat()
+        try:
+            start_dt = datetime.fromisoformat(state.start_date_iso)
+            days_elapsed = (datetime.now(timezone.utc) - start_dt).days
+        except Exception:
+            days_elapsed = 0
+
+        # 7. Final summary + telegram
         pos_str = (f"{state.position.qty:.6f} SOL @ ${state.position.entry_price:.4f}"
                    if state.position else "FLAT (all USDC)")
-        notify.notify_cycle(equity_inr, snap.signal.value, snap.reason, pos_str)
+
+        review_banner = ""
+        if days_elapsed >= 7:
+            review_banner = (
+                f"\n\n🎯 *DAY {days_elapsed} — REVIEW TIME*\n"
+                f"Open Claude Code in the bot directory and ask: \"review the bot\""
+            )
+        notify.notify_cycle(equity_inr, snap.signal.value, snap.reason, pos_str + review_banner)
 
         state.save()
         log.info(f"Cycle complete. Equity=Rs {equity_inr:.2f}  Position={pos_str}")
@@ -170,7 +186,7 @@ def _do_entry(state, snap, equity_inr, sol_inr, usd_inr, sol_usd):
         return
 
     # Cap by available USDC
-    usdc_available = state.__dict__.get("_paper_usdc", 0.0) if config.PAPER_MODE else None
+    usdc_available = state.paper_usdc if config.PAPER_MODE else None
     if usdc_available is not None and sizing.quote_qty > usdc_available:
         log.info(f"Capping by available USDC: {usdc_available:.4f}")
         sizing.quote_qty = usdc_available * 0.99
@@ -192,7 +208,7 @@ def _do_entry(state, snap, equity_inr, sol_inr, usd_inr, sol_usd):
         target_price=snap.target_price,
     )
     if config.PAPER_MODE:
-        state.__dict__["_paper_usdc"] -= result.in_amount
+        state.paper_usdc -= result.in_amount
 
     tax_log.log_swap(
         action="BUY_SOL", token_in="USDC", amount_in=result.in_amount,
@@ -223,7 +239,7 @@ def _do_exit(state, snap, action_name, sol_inr, usd_inr, sol_usd):
     pnl_inr = proceeds_inr - pos.entry_cost_inr
 
     if config.PAPER_MODE:
-        state.__dict__["_paper_usdc"] = state.__dict__.get("_paper_usdc", 0.0) + result.out_amount
+        state.paper_usdc += result.out_amount
 
     tax_log.log_swap(
         action=action_name, token_in="SOL", amount_in=result.in_amount,

@@ -38,6 +38,8 @@ class BotState:
     halt_reason: str = ""
     last_cycle_iso: str = ""
     cycle_count: int = 0
+    start_date_iso: str = ""              # date of first cycle (paper-trading start)
+    paper_usdc: float = 0.0               # paper-mode simulated USDC balance
 
     @classmethod
     def load(cls) -> "BotState":
