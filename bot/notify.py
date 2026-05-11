@@ -29,10 +29,12 @@ def send(text: str, parse_mode: str = "Markdown") -> bool:
             },
             timeout=10,
         )
-        r.raise_for_status()
+        if r.status_code != 200:
+            log.error(f"Telegram send failed: HTTP {r.status_code} body={r.text[:300]}")
+            return False
         return True
     except Exception as e:
-        log.error(f"Telegram send failed: {e}")
+        log.error(f"Telegram send exception: {type(e).__name__}: {e}")
         return False
 
 
