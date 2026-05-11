@@ -4,12 +4,16 @@
 *.pem
 wallet_keypair.json
 
+# Machine-specific scheduler wrapper (paths hard-coded for one host)
+run_cycle.bat
+
 # Logs — verbose, regenerated each run
 logs/
 
-# Data files ARE committed (state persistence for cloud agent),
-# except for transient FX cache
+# Ephemeral runtime data — rebuilt every cycle, no value in tracking
+data/state.json
 data/fx_cache.json
+# Tax/trade logs ARE committed — historical records that matter for tax filing
 
 # Python
 __pycache__/
