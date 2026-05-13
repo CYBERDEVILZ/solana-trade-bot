@@ -1,13 +1,20 @@
-"""Swing trading strategy: EMA cross + RSI filter + ATR-based stops.
+"""Swing trading strategy: EMA cross entry + ATR-only exits.
 
 Designed for low-frequency trades to fit Indian tax regime (1% TDS per sell
-makes scalping unprofitable). Target 2-8 trades/week on hourly candles.
+makes scalping unprofitable). Target 2-4 trades/week on hourly candles.
 
 Signals:
     LONG_ENTRY:   9-EMA crosses above 21-EMA AND 40 <= RSI(14) <= 70 AND volume > 20-bar avg
-    LONG_EXIT:    9-EMA crosses below 21-EMA  (trailing — primary exit)
-    STOP_LOSS:    Price <= entry - 1.5 * ATR(14)
-    TAKE_PROFIT:  Price >= entry + 3.0 * ATR(14)
+    STOP_LOSS:    Price <= entry - 1.5 * ATR(14)        -> realize loss
+    TAKE_PROFIT:  Price >= entry + 3.0 * ATR(14)        -> realize win
+    EOD_FLATTEN:  Cycle in/after 22:30 IST window       -> exit no matter what (in main.py)
+
+Rationale (from May-2026 backtest on 21 days of real SOL data):
+    The earlier variant also used EMA cross-down as an exit. That caused 3 of 6
+    winning setups to bail at small profit instead of running to the +3xATR
+    target, dragging total return from +6.25% down to +1.85% on the same trades.
+    With ATR-only exits, winners are allowed to fully play out — the 2:1 RR
+    math actually works.
 """
 from __future__ import annotations
 
@@ -131,15 +138,15 @@ def evaluate(
                 stop_price, target_price,
                 f"Target hit: price {price:.4f} >= entry {entry_price:.4f} + {config.ATR_TARGET_MULT}*ATR",
             )
-        if cross_down:
-            return StrategySnapshot(
-                Signal.LONG_EXIT, price, ef, es, rsi, atr,
-                stop_price, target_price,
-                f"EMA cross down: fast {ef:.4f} < slow {es:.4f}",
-            )
+        # NOTE: previously had an EMA-cross-down exit here. Removed because the
+        # 21-day backtest showed it cut winners short, dropping total return
+        # from +6.25% to +1.85% on the same trades. Now position rides to
+        # either ATR stop or ATR target (or EOD-flatten in main.py).
+        cross_warn = " | warning: fast EMA crossed below slow, trend weakening" if cross_down else ""
         return StrategySnapshot(
             Signal.HOLD, price, ef, es, rsi, atr, stop_price, target_price,
-            f"Holding long. Distance to stop: {((price - stop_price) / price * 100):.2f}%",
+            f"Holding long. Distance to stop: {((price - stop_price) / price * 100):.2f}%"
+            f", to target: {((target_price - price) / price * 100):.2f}%{cross_warn}",
         )
 
     # No position open — check for entry
