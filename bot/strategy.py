@@ -150,10 +150,11 @@ def evaluate(
         )
 
     # No position open — check for entry
-    if cross_up and config.RSI_MIN <= rsi <= config.RSI_MAX and vol > vol_avg:
+    vol_threshold = vol_avg * config.VOL_FILTER_MULT
+    if cross_up and config.RSI_MIN <= rsi <= config.RSI_MAX and vol > vol_threshold:
         return StrategySnapshot(
             Signal.LONG_ENTRY, price, ef, es, rsi, atr, stop_price, target_price,
-            f"Entry: EMA cross up ({ef:.4f} > {es:.4f}), RSI {rsi:.1f}, vol {vol:.0f} > avg {vol_avg:.0f}",
+            f"Entry: EMA cross up ({ef:.4f} > {es:.4f}), RSI {rsi:.1f}, vol {vol:.0f} > {vol_threshold:.0f} ({config.VOL_FILTER_MULT}x avg)",
         )
 
     blockers = []
@@ -161,8 +162,8 @@ def evaluate(
         blockers.append(f"no EMA cross (fast={ef:.4f}, slow={es:.4f})")
     if not (config.RSI_MIN <= rsi <= config.RSI_MAX):
         blockers.append(f"RSI {rsi:.1f} outside [{config.RSI_MIN}, {config.RSI_MAX}]")
-    if vol <= vol_avg:
-        blockers.append(f"low volume {vol:.0f} <= avg {vol_avg:.0f}")
+    if vol <= vol_threshold:
+        blockers.append(f"low volume {vol:.0f} <= {vol_threshold:.0f} ({config.VOL_FILTER_MULT}x avg)")
     return StrategySnapshot(
         Signal.HOLD, price, ef, es, rsi, atr, stop_price, target_price,
         "Flat. Waiting: " + "; ".join(blockers),

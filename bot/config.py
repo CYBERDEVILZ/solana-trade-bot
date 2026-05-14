@@ -59,6 +59,9 @@ RSI_MAX = float(_opt("RSI_MAX", "70"))
 ATR_PERIOD = int(_opt("ATR_PERIOD", "14"))
 ATR_STOP_MULT = float(_opt("ATR_STOP_MULT", "1.5"))
 ATR_TARGET_MULT = float(_opt("ATR_TARGET_MULT", "3.0"))
+# Volume filter multiplier: candle volume must exceed (vol_avg20 * VOL_FILTER_MULT)
+# 1.0 = strict (must be above average); 0.8 = allows 20% margin; 0.0 = disabled
+VOL_FILTER_MULT = float(_opt("VOL_FILTER_MULT", "0.8"))
 
 # Operational
 PAPER_MODE = _flag("PAPER_MODE", True)
