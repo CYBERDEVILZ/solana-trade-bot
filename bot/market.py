@@ -195,6 +195,7 @@ def get_candles(
     token_symbol: str,
     interval: str = "1H",
     limit: int = 200,
+    closed_only: bool = True,
 ) -> pd.DataFrame:
     """Fetch OHLCV candles from Binance public API.
 
@@ -203,6 +204,10 @@ def get_candles(
     within a few basis points and is the most reliable free OHLCV source.
 
     interval: "1m", "5m", "15m", "30m", "1H", "4H", "1D", "1W"
+    closed_only: if True (default), drop the most recent candle if it is
+        still forming (i.e., its close_time is in the future). This is
+        critical for strategy stability — indicators on a live-forming
+        candle move minute by minute and produce spurious cross signals.
     Returns DataFrame: time, open, high, low, close, volume.
     """
     if token_symbol not in BINANCE_SYMBOLS:
@@ -210,10 +215,12 @@ def get_candles(
     if interval not in BINANCE_INTERVALS:
         raise ValueError(f"Unsupported interval {interval}")
 
+    # Pull one extra so that after dropping the forming candle we still have `limit`
+    fetch_limit = limit + 1 if closed_only else limit
     params = {
         "symbol": BINANCE_SYMBOLS[token_symbol],
         "interval": BINANCE_INTERVALS[interval],
-        "limit": limit,
+        "limit": fetch_limit,
     }
     r = requests.get(BINANCE_KLINES_URL, params=params, timeout=TIMEOUT)
     r.raise_for_status()
@@ -228,8 +235,15 @@ def get_candles(
         "taker_buy_base", "taker_buy_quote", "_ignore",
     ])
     df["time"] = pd.to_datetime(df["open_time"], unit="ms", utc=True)
+    df["close_time"] = pd.to_datetime(df["close_time"], unit="ms", utc=True)
     for col in ("open", "high", "low", "close", "volume"):
         df[col] = df[col].astype(float)
+
+    if closed_only:
+        now_utc = pd.Timestamp.now(tz="UTC")
+        # Drop any rows whose close_time is in the future (i.e., still forming)
+        df = df[df["close_time"] <= now_utc].copy()
+
     return df[["time", "open", "high", "low", "close", "volume"]].reset_index(drop=True)
 
 
