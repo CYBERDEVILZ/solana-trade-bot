@@ -1,11 +1,13 @@
 """Market data: prices, quotes, historical candles.
 
 Sources:
-- Binance public API for spot prices, klines, and paper-mode quote synthesis
-  (Anthropic's cloud sandbox is blocked by Jupiter's lite API, so paper mode
-  uses Binance as the single oracle. Live mode in Phase 4 will need Jupiter
-  via a different network path.)
+- Coinbase Exchange API for SOL-USD spot price + hourly candles.
+  (Binance was the original source, but it returns HTTP 451 from US IPs
+  including all GitHub Actions runners, due to its 2023 SEC settlement.
+  Coinbase has no such restriction.)
 - Frankfurter (ECB) for USD/INR conversion — free, no key, generous limits.
+- Synthetic quote derived from Coinbase spot for paper-mode swaps.
+  Live (Phase 4) swaps will use Jupiter directly on Solana.
 """
 from __future__ import annotations
 
@@ -22,8 +24,7 @@ from . import config
 
 log = logging.getLogger(__name__)
 
-BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines"
-BINANCE_TICKER_URL = "https://api.binance.com/api/v3/ticker/price"
+COINBASE_BASE = "https://api.exchange.coinbase.com"
 # Jupiter URLs kept here for Phase 4 live execution; not used in paper mode.
 JUPITER_PRICE_URL = "https://lite-api.jup.ag/price/v3"
 JUPITER_QUOTE_URL = "https://lite-api.jup.ag/swap/v1/quote"
@@ -31,15 +32,16 @@ JUPITER_QUOTE_URL = "https://lite-api.jup.ag/swap/v1/quote"
 FRANKFURTER_URL = "https://api.frankfurter.app/latest"
 FX_CACHE_FILE = config.DATA_DIR / "fx_cache.json"
 
-# Map our token symbols to Binance trading pairs (vs USDT, which tracks USDC closely).
-BINANCE_SYMBOLS = {
-    "SOL": "SOLUSDT",
+# Map our token symbols to Coinbase product IDs.
+COINBASE_PRODUCTS = {
+    "SOL": "SOL-USD",
 }
 
-# Map our interval names to Binance interval codes.
-BINANCE_INTERVALS = {
-    "1m": "1m", "5m": "5m", "15m": "15m", "30m": "30m",
-    "1H": "1h", "4H": "4h", "1D": "1d", "1W": "1w",
+# Map our interval names to Coinbase granularity (seconds).
+# Coinbase supports: 60, 300, 900, 3600, 21600, 86400.
+COINBASE_GRANULARITY = {
+    "1m": 60, "5m": 300, "15m": 900,
+    "1H": 3600, "6H": 21600, "1D": 86400,
 }
 
 # Default request timeout
@@ -59,17 +61,18 @@ class Quote:
 
 
 def get_spot_price_usd(token_symbol: str) -> float:
-    """Get USD spot price for a token via Binance ticker.
+    """Get USD spot price for a token via Coinbase Exchange ticker.
 
-    Binance is reachable from Anthropic's cloud sandbox; Jupiter's lite API is not.
-    SOL/USDT on Binance tracks on-chain SOL/USDC within a few basis points.
+    Coinbase SOL-USD tracks on-chain SOL/USDC within a few basis points and
+    is reachable from any IP (no geo-block).
     """
-    if token_symbol not in BINANCE_SYMBOLS:
-        raise ValueError(f"No Binance mapping for {token_symbol}")
+    if token_symbol not in COINBASE_PRODUCTS:
+        raise ValueError(f"No Coinbase mapping for {token_symbol}")
+    product = COINBASE_PRODUCTS[token_symbol]
     r = requests.get(
-        BINANCE_TICKER_URL,
-        params={"symbol": BINANCE_SYMBOLS[token_symbol]},
+        f"{COINBASE_BASE}/products/{product}/ticker",
         timeout=TIMEOUT,
+        headers={"User-Agent": "solana-trade-bot/1.0"},
     )
     r.raise_for_status()
     return float(r.json()["price"])
@@ -197,52 +200,61 @@ def get_candles(
     limit: int = 200,
     closed_only: bool = True,
 ) -> pd.DataFrame:
-    """Fetch OHLCV candles from Binance public API.
+    """Fetch OHLCV candles from Coinbase Exchange.
 
-    Binance is used as a *price oracle only* — actual swaps still execute
-    on Solana via Jupiter. SOL/USDT on Binance tracks on-chain SOL/USDC
-    within a few basis points and is the most reliable free OHLCV source.
+    Coinbase is used as the *price oracle only* — actual swaps still execute
+    on Solana via Jupiter. Coinbase SOL-USD has deep liquidity and reliable
+    OHLCV history that tracks on-chain SOL/USDC within a few basis points.
 
-    interval: "1m", "5m", "15m", "30m", "1H", "4H", "1D", "1W"
+    interval: "1m", "5m", "15m", "1H", "6H", "1D"
     closed_only: if True (default), drop the most recent candle if it is
-        still forming (i.e., its close_time is in the future). This is
-        critical for strategy stability — indicators on a live-forming
-        candle move minute by minute and produce spurious cross signals.
-    Returns DataFrame: time, open, high, low, close, volume.
+        still forming. Critical for strategy stability — indicators on a
+        live-forming candle produce spurious cross signals.
+    Returns DataFrame: time, open, high, low, close, volume (sorted ascending).
     """
-    if token_symbol not in BINANCE_SYMBOLS:
-        raise ValueError(f"No Binance mapping for {token_symbol}")
-    if interval not in BINANCE_INTERVALS:
+    if token_symbol not in COINBASE_PRODUCTS:
+        raise ValueError(f"No Coinbase mapping for {token_symbol}")
+    if interval not in COINBASE_GRANULARITY:
         raise ValueError(f"Unsupported interval {interval}")
 
-    # Pull one extra so that after dropping the forming candle we still have `limit`
-    fetch_limit = limit + 1 if closed_only else limit
-    params = {
-        "symbol": BINANCE_SYMBOLS[token_symbol],
-        "interval": BINANCE_INTERVALS[interval],
-        "limit": fetch_limit,
-    }
-    r = requests.get(BINANCE_KLINES_URL, params=params, timeout=TIMEOUT)
+    product = COINBASE_PRODUCTS[token_symbol]
+    granularity = COINBASE_GRANULARITY[interval]
+    # Coinbase returns up to 300 rows per request. Request 'limit + buffer'.
+    fetch_n = min(300, max(limit + 5, 50))
+    end_unix = int(time.time())
+    start_unix = end_unix - fetch_n * granularity
+
+    r = requests.get(
+        f"{COINBASE_BASE}/products/{product}/candles",
+        params={
+            "granularity": granularity,
+            "start": pd.to_datetime(start_unix, unit="s", utc=True).isoformat(),
+            "end": pd.to_datetime(end_unix, unit="s", utc=True).isoformat(),
+        },
+        timeout=TIMEOUT,
+        headers={"User-Agent": "solana-trade-bot/1.0"},
+    )
     r.raise_for_status()
     rows = r.json()
 
     if not rows:
         return pd.DataFrame(columns=["time", "open", "high", "low", "close", "volume"])
 
-    df = pd.DataFrame(rows, columns=[
-        "open_time", "open", "high", "low", "close", "volume",
-        "close_time", "quote_vol", "num_trades",
-        "taker_buy_base", "taker_buy_quote", "_ignore",
-    ])
-    df["time"] = pd.to_datetime(df["open_time"], unit="ms", utc=True)
-    df["close_time"] = pd.to_datetime(df["close_time"], unit="ms", utc=True)
+    # Coinbase row: [time, low, high, open, close, volume] — descending by time.
+    df = pd.DataFrame(rows, columns=["time_unix", "low", "high", "open", "close", "volume"])
+    df["time"] = pd.to_datetime(df["time_unix"], unit="s", utc=True)
+    df["close_time"] = df["time"] + pd.Timedelta(seconds=granularity)
     for col in ("open", "high", "low", "close", "volume"):
         df[col] = df[col].astype(float)
+    df = df.sort_values("time").reset_index(drop=True)
 
     if closed_only:
         now_utc = pd.Timestamp.now(tz="UTC")
-        # Drop any rows whose close_time is in the future (i.e., still forming)
         df = df[df["close_time"] <= now_utc].copy()
+
+    # Trim to the requested limit (keep most recent rows)
+    if len(df) > limit:
+        df = df.tail(limit).reset_index(drop=True)
 
     return df[["time", "open", "high", "low", "close", "volume"]].reset_index(drop=True)
 
