@@ -10,8 +10,8 @@ run_cycle.bat
 # Logs — verbose, regenerated each run
 logs/
 
-# Ephemeral runtime data — rebuilt every cycle, no value in tracking
-data/state.json
+# State.json is now committed — needed for GitHub Actions to persist across runs
+# (each Actions run is ephemeral, so state must live in the repo)
 data/fx_cache.json
 # Tax/trade logs ARE committed — historical records that matter for tax filing
 

@@ -1,0 +1,87 @@
+name: Trading Cycle
+
+on:
+  schedule:
+    # Every hour at :17 UTC (= :47 IST). Avoids GitHub's :00 and :30 cron stampedes.
+    # The 17:17 UTC = 22:47 IST cycle hits the EOD-flatten window (22:30 IST).
+    - cron: '17 * * * *'
+  workflow_dispatch: {}
+
+# Stop overlapping runs — if a previous cycle is still going, skip the new one.
+concurrency:
+  group: trading-cycle
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  run-cycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.BOT_GH_PAT }}
+          fetch-depth: 1
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Write .env from secrets
+        env:
+          MAIN_WALLET_PUBKEY: ${{ secrets.MAIN_WALLET_PUBKEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          cat > .env <<EOF
+          MAIN_WALLET_PUBKEY=${MAIN_WALLET_PUBKEY}
+          SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+          TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+          TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+          MAX_CAPITAL_INR=5000
+          RISK_PER_TRADE_PCT=2.0
+          MAX_DRAWDOWN_PCT=15.0
+          DAILY_LOSS_HALT_PCT=5.0
+          EMA_FAST=9
+          EMA_SLOW=21
+          RSI_PERIOD=14
+          RSI_MIN=40
+          RSI_MAX=70
+          ATR_PERIOD=14
+          ATR_STOP_MULT=1.5
+          ATR_TARGET_MULT=3.0
+          VOL_FILTER_MULT=0.8
+          PAPER_MODE=true
+          EOD_FLATTEN_HOUR_IST=22
+          EOD_FLATTEN_MINUTE_IST=30
+          EOF
+
+      - name: Run bot cycle
+        id: cycle
+        run: python -m bot.main
+
+      - name: Commit state if changed
+        if: always()
+        run: |
+          git config user.email "pranavcosmos4@gmail.com"
+          git config user.name  "CYBERDEVILZ"
+          # Only stage data files we want tracked
+          git add data/state.json 2>/dev/null || true
+          git add data/tax_log.csv 2>/dev/null || true
+          git add data/trades.csv 2>/dev/null || true
+          if git diff --staged --quiet; then
+            echo "No state changes to commit."
+          else
+            SIG=$(grep -E 'Signal: [A-Z_]+' logs/bot_*.log 2>/dev/null | tail -1 | sed -E 's/.*Signal: ([A-Z_]+).*/\1/' || echo "UNKNOWN")
+            git commit -m "auto: cycle complete (signal: ${SIG})"
+            git push
+          fi
