@@ -68,11 +68,19 @@ PAPER_MODE = _flag("PAPER_MODE", True)
 EOD_FLATTEN_HOUR_IST = int(_opt("EOD_FLATTEN_HOUR_IST", "23"))
 EOD_FLATTEN_MINUTE_IST = int(_opt("EOD_FLATTEN_MINUTE_IST", "55"))
 
-# Token mint addresses on Solana mainnet
+# Token mint addresses on Solana mainnet (needed for Phase 4 live swaps via Jupiter)
 TOKENS = {
     "SOL": "So11111111111111111111111111111111111111112",
+    "JTO": "jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL",
     "USDC": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
 }
+
+# Decimal places for each token (SPL token spec). Used for unit conversion.
+DECIMALS = {"SOL": 9, "JTO": 9, "USDC": 6}
+
+# Trading universe — bot scans these tokens each cycle, takes first valid entry.
+# Comma-separated env var (e.g., "SOL,JTO,RAY"). Position is always vs USDC.
+UNIVERSE = [s.strip() for s in _opt("UNIVERSE", "SOL,JTO").split(",") if s.strip()]
 
 # File paths
 STATE_FILE = DATA_DIR / "state.json"

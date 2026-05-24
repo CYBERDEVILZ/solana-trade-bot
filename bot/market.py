@@ -35,6 +35,7 @@ FX_CACHE_FILE = config.DATA_DIR / "fx_cache.json"
 # Map our token symbols to Coinbase product IDs.
 COINBASE_PRODUCTS = {
     "SOL": "SOL-USD",
+    "JTO": "JTO-USD",
 }
 
 # Map our interval names to Coinbase granularity (seconds).
@@ -132,17 +133,20 @@ def get_quote(
 
 
 def _synthetic_quote(in_token, out_token, in_amount_ui, slippage_bps) -> Quote:
-    """Build a paper-mode quote from Binance spot price."""
-    # Figure out the SOL/USDC price in UI units (both have a USD-denominated price).
-    if in_token == "SOL" and out_token == "USDC":
-        price = get_spot_price_usd("SOL")           # USDC per SOL
-    elif in_token == "USDC" and out_token == "SOL":
-        price = 1.0 / get_spot_price_usd("SOL")     # SOL per USDC
+    """Build a paper-mode quote from Coinbase spot price.
+
+    Supports any token<->USDC pair where the token exists in COINBASE_PRODUCTS.
+    """
+    # All prices are denominated in USDC (~=USD).
+    if out_token == "USDC" and in_token in COINBASE_PRODUCTS:
+        price = get_spot_price_usd(in_token)              # USDC per token
+    elif in_token == "USDC" and out_token in COINBASE_PRODUCTS:
+        price = 1.0 / get_spot_price_usd(out_token)       # token per USDC
     else:
         raise ValueError(f"Unsupported pair: {in_token} -> {out_token}")
 
-    in_decimals = 9 if in_token == "SOL" else 6
-    out_decimals = 9 if out_token == "SOL" else 6
+    in_decimals = config.DECIMALS.get(in_token, 9)
+    out_decimals = config.DECIMALS.get(out_token, 9)
 
     in_amount_raw = int(round(in_amount_ui * (10 ** in_decimals)))
     out_amount_ui = in_amount_ui * price
@@ -156,7 +160,7 @@ def _synthetic_quote(in_token, out_token, in_amount_ui, slippage_bps) -> Quote:
         price=price,
         price_impact_pct=0.0,
         route_plan=[],
-        raw={"synthetic": True, "source": "binance"},
+        raw={"synthetic": True, "source": "coinbase"},
     )
 
 
