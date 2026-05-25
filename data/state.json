@@ -6,8 +6,8 @@
   "position": null,
   "halted": false,
   "halt_reason": "",
-  "last_cycle_iso": "2026-05-25T00:14:46.535578+00:00",
-  "cycle_count": 200,
+  "last_cycle_iso": "2026-05-25T04:53:46.327213+00:00",
+  "cycle_count": 201,
   "start_date_iso": "2026-05-11T20:06:04.488252+00:00",
   "paper_usdc": 52.45488879563576
 }
