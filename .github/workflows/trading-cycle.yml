@@ -2,9 +2,12 @@ name: Trading Cycle
 
 on:
   schedule:
-    # Every hour at :17 UTC (= :47 IST). Avoids GitHub's :00 and :30 cron stampedes.
-    # The 17:17 UTC = 22:47 IST cycle hits the EOD-flatten window (22:30 IST).
-    - cron: '17 * * * *'
+    # Every 30 minutes at :17 and :47 UTC. GitHub's free-tier scheduled workflows
+    # drop ~half of scheduled runs under load — running 2x/hour gives us roughly
+    # hourly coverage even with 50% drop rate. Safe because: strategy operates on
+    # closed hourly candles (same data within an hour → same decision), and the
+    # position-check guards prevent double-entry.
+    - cron: '17,47 * * * *'
   workflow_dispatch: {}
 
 # Stop overlapping runs — if a previous cycle is still going, skip the new one.
