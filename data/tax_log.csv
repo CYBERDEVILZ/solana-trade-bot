@@ -1,0 +1,2 @@
+timestamp_ist,action,token_in,amount_in,token_out,amount_out,sol_inr_price,usd_inr_price,gross_inr_value,fee_inr,cost_basis_inr,realized_pnl_inr,tx_signature,route_summary,paper_mode
+2026-06-13 14:01:13,BUY_JTO,USDC,36.81656800,JTO,67709.40965416,51.6692,95.1200,3501.99,0.05,3501.99,0.00,,USDC->JTO (direct) [PAPER],true
