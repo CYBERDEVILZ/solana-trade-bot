@@ -54,13 +54,14 @@ def log_swap(
     """Append one swap row to tax_log.csv."""
     _ensure_header()
 
-    # Compute gross INR value of the swap (use input side)
-    if token_in == "SOL":
-        gross_inr = amount_in * sol_inr_price
-    elif token_in == "USDC":
+    # Compute gross INR value of the swap (use input side).
+    # `sol_inr_price` is actually the position-token's INR price for this swap
+    # (poorly-named param, kept for backward-compatible CSV columns).
+    if token_in == "USDC":
         gross_inr = amount_in * usd_inr_price
     else:
-        gross_inr = 0.0
+        # SOL, JTO, or any other token-in: use token-INR price
+        gross_inr = amount_in * sol_inr_price
 
     ts = datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
 

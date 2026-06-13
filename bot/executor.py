@@ -73,8 +73,10 @@ def execute_swap(
 
 def _paper_fill(quote) -> SwapResult:
     """Simulate a fill — apply slippage haircut, no signing."""
-    out_decimals = 9 if quote.out_token == "SOL" else 6
-    in_decimals = 9 if quote.in_token == "SOL" else 6
+    # FIX (2026-06-13): was hardcoded `9 if SOL else 6` — broke JTO (and any other
+    # 9-decimal SPL token) by treating it as USDC, inflating quantities by 1000x.
+    out_decimals = config.DECIMALS.get(quote.out_token, 9)
+    in_decimals = config.DECIMALS.get(quote.in_token, 9)
 
     out_ui = quote.out_amount_raw / (10 ** out_decimals)
     in_ui = quote.in_amount_raw / (10 ** in_decimals)
