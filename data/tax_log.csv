@@ -1,3 +1,4 @@
 timestamp_ist,action,token_in,amount_in,token_out,amount_out,sol_inr_price,usd_inr_price,gross_inr_value,fee_inr,cost_basis_inr,realized_pnl_inr,tx_signature,route_summary,paper_mode
 2026-06-13 14:01:13,BUY_JTO,USDC,36.81656800,JTO,67.70938889,51.6692,95.1200,3501.99,0.05,3501.99,0.00,,USDC->JTO (direct) [PAPER],true
 2026-06-13 23:28:10,EOD_FLATTEN_JTO,JTO,67.70938889,USDC,36.11391544,50.7846,95.1200,3438.59,0.05,3501.99,-66.84,,JTO->USDC (direct) [PAPER],true
+2026-06-15 03:08:17,BUY_JTO,USDC,39.90113700,JTO,72.36970889,52.3921,95.1200,3795.40,0.05,3795.40,0.00,,USDC->JTO (direct) [PAPER],true
