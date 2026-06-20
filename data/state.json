@@ -13,8 +13,8 @@
     "stop_price": 0.7110419031614208,
     "target_price": 0.8156161936771584
   },
-  "halted": true,
-  "halt_reason": "Daily loss halt: 5.60% >= 5.0%",
+  "halted": false,
+  "halt_reason": "",
   "last_cycle_iso": "2026-06-20T15:19:29.787437+00:00",
   "cycle_count": 430,
   "start_date_iso": "2026-05-11T20:06:04.488252+00:00",

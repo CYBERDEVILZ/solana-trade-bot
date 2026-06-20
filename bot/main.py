@@ -121,12 +121,22 @@ def run_cycle() -> int:
         # 3. Check kill switches
         halt = risk.check_halts(state, equity_inr)
         if halt:
+            was_halted = state.halted
             state.halted = True
             state.halt_reason = halt
-            state.save()
-            log.warning(f"HALTED: {halt}")
-            notify.notify_halt(halt, equity_inr)
-            return 2
+            if not was_halted:
+                # First time halting this cycle — fire alert
+                log.warning(f"HALTED: {halt}")
+                notify.notify_halt(halt, equity_inr)
+            else:
+                log.warning(f"Still halted: {halt}")
+            # If halted AND flat, nothing more to do
+            if not state.position:
+                state.save()
+                return 2
+            # Halted but in position: continue to evaluate exits (stop/target/EOD)
+            # to protect the open trade. Entries are blocked below.
+            log.info(f"Halted but holding {state.position.token} — evaluating exits only.")
 
         # 4. Strategy — depends on whether we hold a position
         signal_value = "HOLD"
@@ -146,6 +156,11 @@ def run_cycle() -> int:
                 _do_exit(state, snap, snap.signal.value, spot[state.position.token], usd_inr)
             else:
                 log.info("Holding position. No action.")
+        elif state.halted:
+            # Halted and flat: no new entries.
+            signal_value = "HOLD"
+            signal_reason = f"Halted ({state.halt_reason}) — no new entries"
+            log.info(signal_reason)
         else:
             # Flat: scan universe in order, take first valid entry.
             entered = False

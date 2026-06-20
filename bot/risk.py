@@ -9,7 +9,7 @@ from typing import Optional
 from . import config
 from .state import BotState
 
-log = logging.getLogger(__name__)
+log = logging.getLogger("bot.risk")
 
 IST_OFFSET = timedelta(hours=5, minutes=30)
 
@@ -79,7 +79,24 @@ def size_long_entry(
 
 
 def check_halts(state: BotState, current_equity_inr: float) -> Optional[str]:
-    """Return halt reason if any kill-switch fires, else None."""
+    """Return halt reason if any kill-switch fires, else None.
+
+    Side effects:
+    - Updates peak_equity_inr (high-water mark)
+    - Rolls daily_date + daily_start_equity_inr on new IST day, and
+      AUTO-CLEARS a daily_loss halt at the same time (so the bot can trade
+      again the next day). Max-drawdown halts are NOT auto-cleared — those
+      need manual intervention.
+    """
+    today = today_ist_str()
+    new_day = state.daily_date != today
+
+    # Auto-clear daily-loss halts on a new IST day.
+    if state.halted and new_day and state.halt_reason.startswith("Daily loss"):
+        log.info(f"Auto-clearing daily halt on new day rollover ({state.daily_date} -> {today})")
+        state.halted = False
+        state.halt_reason = ""
+
     if state.halted:
         return state.halt_reason
 
@@ -87,15 +104,14 @@ def check_halts(state: BotState, current_equity_inr: float) -> Optional[str]:
     if current_equity_inr > state.peak_equity_inr:
         state.peak_equity_inr = current_equity_inr
 
-    # Drawdown halt
+    # Drawdown halt (long-term, NOT auto-cleared)
     if state.peak_equity_inr > 0:
         dd_pct = (state.peak_equity_inr - current_equity_inr) / state.peak_equity_inr * 100
         if dd_pct >= config.MAX_DRAWDOWN_PCT:
             return f"Max drawdown hit: {dd_pct:.2f}% >= {config.MAX_DRAWDOWN_PCT}%"
 
     # Daily-loss halt
-    today = today_ist_str()
-    if state.daily_date != today:
+    if new_day:
         state.daily_date = today
         state.daily_start_equity_inr = current_equity_inr
     elif state.daily_start_equity_inr > 0:
