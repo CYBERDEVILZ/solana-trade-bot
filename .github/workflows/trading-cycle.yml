@@ -2,12 +2,13 @@ name: Trading Cycle
 
 on:
   schedule:
-    # Every 30 minutes at :17 and :47 UTC. GitHub's free-tier scheduled workflows
-    # drop ~half of scheduled runs under load — running 2x/hour gives us roughly
-    # hourly coverage even with 50% drop rate. Safe because: strategy operates on
-    # closed hourly candles (same data within an hour → same decision), and the
-    # position-check guards prevent double-entry.
-    - cron: '17,47 * * * *'
+    # Every 15 min. GHA free-tier scheduled workflows drop ~50-80% of runs under
+    # load — running 4x/hour gives ~hourly coverage even with 75% drop rate.
+    # Safe because: strategy uses closed hourly candles (same data within an
+    # hour → same decision), position guards prevent double-entry, and sticky
+    # cross detection (see strategy.py CROSS_LOOKBACK) catches signals even if
+    # we missed the exact cross bar.
+    - cron: '2,17,32,47 * * * *'
   workflow_dispatch: {}
 
 # Stop overlapping runs — if a previous cycle is still going, skip the new one.

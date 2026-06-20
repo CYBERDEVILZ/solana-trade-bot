@@ -122,8 +122,22 @@ def evaluate(
     stop_price = (entry_price or price) - config.ATR_STOP_MULT * atr
     target_price = (entry_price or price) + config.ATR_TARGET_MULT * atr
 
-    cross_up = (ef_p <= es_p) and (ef > es)
     cross_down = (ef_p >= es_p) and (ef < es)
+
+    # Sticky cross detection: was there a fast-above-slow transition within the
+    # last CROSS_LOOKBACK closed candles, AND is the trend still up now?
+    # CROSS_LOOKBACK=1 reproduces the classic 1-bar cross. >1 protects against
+    # missed cycles (e.g., GHA dropping scheduled runs).
+    cross_up = False
+    cross_bar_offset = None
+    if ef > es:
+        lookback = max(1, min(config.CROSS_LOOKBACK, len(ind) - 1))
+        for k in range(1, lookback + 1):
+            past = ind.iloc[-1 - k]
+            if past["ema_fast"] <= past["ema_slow"]:
+                cross_up = True
+                cross_bar_offset = k
+                break
 
     if position_open:
         if entry_price is not None and price <= entry_price - config.ATR_STOP_MULT * atr:
@@ -152,9 +166,10 @@ def evaluate(
     # No position open — check for entry
     vol_threshold = vol_avg * config.VOL_FILTER_MULT
     if cross_up and config.RSI_MIN <= rsi <= config.RSI_MAX and vol > vol_threshold:
+        sticky_tag = "" if cross_bar_offset == 1 else f" (sticky: {cross_bar_offset}b ago)"
         return StrategySnapshot(
             Signal.LONG_ENTRY, price, ef, es, rsi, atr, stop_price, target_price,
-            f"Entry: EMA cross up ({ef:.4f} > {es:.4f}), RSI {rsi:.1f}, vol {vol:.0f} > {vol_threshold:.0f} ({config.VOL_FILTER_MULT}x avg)",
+            f"Entry: EMA cross up ({ef:.4f} > {es:.4f}){sticky_tag}, RSI {rsi:.1f}, vol {vol:.0f} > {vol_threshold:.0f} ({config.VOL_FILTER_MULT}x avg)",
         )
 
     blockers = []
