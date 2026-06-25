@@ -13,10 +13,10 @@
     "stop_price": 0.6515939582429112,
     "target_price": 0.7299120835141775
   },
-  "halted": false,
-  "halt_reason": "",
-  "last_cycle_iso": "2026-06-25T05:49:11.645120+00:00",
-  "cycle_count": 472,
+  "halted": true,
+  "halt_reason": "Max drawdown hit: 16.25% >= 15.0%",
+  "last_cycle_iso": "2026-06-25T09:38:32.332238+00:00",
+  "cycle_count": 473,
   "start_date_iso": "2026-05-11T20:06:04.488252+00:00",
   "paper_usdc": 22.6534674131586
 }
