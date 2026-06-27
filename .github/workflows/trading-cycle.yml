@@ -64,6 +64,7 @@ jobs:
           ATR_STOP_MULT=1.5
           ATR_TARGET_MULT=3.0
           VOL_FILTER_MULT=0.8
+          CROSS_LOOKBACK=1
           UNIVERSE=SOL,JTO
           PAPER_MODE=true
           EOD_FLATTEN_HOUR_IST=22

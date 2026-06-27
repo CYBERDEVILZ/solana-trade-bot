@@ -62,10 +62,11 @@ ATR_TARGET_MULT = float(_opt("ATR_TARGET_MULT", "3.0"))
 # Volume filter multiplier: candle volume must exceed (vol_avg20 * VOL_FILTER_MULT)
 # 1.0 = strict (must be above average); 0.8 = allows 20% margin; 0.0 = disabled
 VOL_FILTER_MULT = float(_opt("VOL_FILTER_MULT", "0.8"))
-# Cross-detection lookback (closed candles). 1 = strict (cross must be on the
-# latest closed bar). 3 = catches crosses up to 3 hours late, useful when
-# scheduler reliability is patchy (e.g., GHA free-tier dropping cycles).
-CROSS_LOOKBACK = int(_opt("CROSS_LOOKBACK", "3"))
+# Cross-detection lookback (closed candles). 1 = strict 1-bar cross (default).
+# Was raised to 3 on 2026-06-20 to catch crosses GHA missed — but 47-day live
+# data showed it created weak late entries and 4 straight stop-loss trades
+# (post-sticky P&L: -Rs 441 vs pre-sticky -Rs 79). Reverted to 1 on 2026-06-27.
+CROSS_LOOKBACK = int(_opt("CROSS_LOOKBACK", "1"))
 
 # Operational
 PAPER_MODE = _flag("PAPER_MODE", True)
