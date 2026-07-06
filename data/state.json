@@ -1,8 +1,8 @@
 {
   "starting_equity_inr": 5000.0,
   "peak_equity_inr": 4438.9447460197725,
-  "daily_start_equity_inr": 4345.1853684610205,
-  "daily_date": "2026-07-06",
+  "daily_start_equity_inr": 4254.517971994031,
+  "daily_date": "2026-07-07",
   "position": {
     "token": "SOL",
     "quote_token": "USDC",
@@ -15,8 +15,8 @@
   },
   "halted": false,
   "halt_reason": "",
-  "last_cycle_iso": "2026-07-06T17:30:36.735756+00:00",
-  "cycle_count": 596,
+  "last_cycle_iso": "2026-07-06T19:21:28.009314+00:00",
+  "cycle_count": 597,
   "start_date_iso": "2026-05-11T20:06:04.488252+00:00",
   "paper_usdc": 2.231952017158598
 }
