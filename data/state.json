@@ -15,8 +15,8 @@
   },
   "halted": false,
   "halt_reason": "",
-  "last_cycle_iso": "2026-07-10T08:52:43.798517+00:00",
-  "cycle_count": 634,
+  "last_cycle_iso": "2026-07-10T12:06:30.273924+00:00",
+  "cycle_count": 635,
   "start_date_iso": "2026-05-11T20:06:04.488252+00:00",
   "paper_usdc": 2.2370111941585975
 }
