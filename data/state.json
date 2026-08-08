@@ -3,11 +3,20 @@
   "peak_equity_inr": 4438.9447460197725,
   "daily_start_equity_inr": 4085.4351622404297,
   "daily_date": "2026-08-08",
-  "position": null,
+  "position": {
+    "token": "JTO",
+    "quote_token": "USDC",
+    "qty": 81.659268002988,
+    "entry_price": 0.4987,
+    "entry_ts_iso": "2026-08-08T15:13:29.198808+00:00",
+    "entry_cost_inr": 3881.1633856099998,
+    "stop_price": 0.4920083530697299,
+    "target_price": 0.5111832938605402
+  },
   "halted": false,
   "halt_reason": "",
-  "last_cycle_iso": "2026-08-08T14:43:56.745158+00:00",
-  "cycle_count": 1029,
+  "last_cycle_iso": "2026-08-08T15:13:28.762166+00:00",
+  "cycle_count": 1030,
   "start_date_iso": "2026-05-11T20:06:04.488252+00:00",
-  "paper_usdc": 42.9097275731586
+  "paper_usdc": 2.1454865731585997
 }
