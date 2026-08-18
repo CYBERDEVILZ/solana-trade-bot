@@ -1,13 +1,13 @@
 {
   "starting_equity_inr": 5000.0,
   "peak_equity_inr": 4438.9447460197725,
-  "daily_start_equity_inr": 3999.3666395262726,
-  "daily_date": "2026-08-18",
+  "daily_start_equity_inr": 4002.7130398103654,
+  "daily_date": "2026-08-19",
   "position": null,
   "halted": false,
   "halt_reason": "",
-  "last_cycle_iso": "2026-08-18T18:16:20.690084+00:00",
-  "cycle_count": 1306,
+  "last_cycle_iso": "2026-08-18T19:02:44.747019+00:00",
+  "cycle_count": 1307,
   "start_date_iso": "2026-05-11T20:06:04.488252+00:00",
   "paper_usdc": 41.83000355115859
 }
