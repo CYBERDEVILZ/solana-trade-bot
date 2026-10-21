@@ -6,8 +6,8 @@
   "position": null,
   "halted": true,
   "halt_reason": "Max drawdown hit: 15.17% >= 15.0%",
-  "last_cycle_iso": "2026-10-21T19:40:35.362334+00:00",
-  "cycle_count": 1889,
+  "last_cycle_iso": "2026-10-21T22:48:17.767932+00:00",
+  "cycle_count": 1890,
   "start_date_iso": "2026-05-11T20:06:04.488252+00:00",
   "paper_usdc": 41.141658084158585
 }
